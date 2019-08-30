@@ -90,6 +90,16 @@ class NodeType(StatefulEntityType):
                 relationship[rtype] = relatednode
         return relationship
 
+    def __is_def_for_node_type(self, potential_node_type_name, potential_node_type_def, all_defs):
+        if potential_node_type_name == 'tosca.nodes.Root':
+            return True
+        else:
+            if 'derived_from' in potential_node_type_def:
+                derived_from = potential_node_type_def['derived_from']
+                if derived_from in all_defs:
+                    return self.__is_def_for_node_type(derived_from, all_defs[derived_from], all_defs)
+        return False
+
     def _get_node_type_by_cap(self, cap):
         '''Find the node type that has the provided capability
 
@@ -98,14 +108,15 @@ class NodeType(StatefulEntityType):
         '''
 
         # Filter the node types
-        node_types = [node_type for node_type in self.TOSCA_DEF.keys()
-                      if node_type.startswith(self.NODE_PREFIX) and
-                      node_type != 'tosca.nodes.Root']
-        custom_node_types = [node_type for node_type in self.custom_def.keys()
-                             if node_type.startswith(self.NODE_PREFIX) and
-                             node_type != 'tosca.nodes.Root']
+        all_types = {}
+        all_types.update(self.TOSCA_DEF)
+        all_types.update(self.custom_def)
+        all_node_types = []
+        for type_name, type_def in all_types.items():
+            if self.__is_def_for_node_type(type_name, type_def, all_types):
+                all_node_types.append(type_name)
 
-        for node_type in node_types + custom_node_types:
+        for node_type in all_node_types:
             if node_type in self.TOSCA_DEF:
                 node_def = self.TOSCA_DEF[node_type]
             else:
