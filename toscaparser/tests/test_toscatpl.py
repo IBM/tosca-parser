@@ -148,6 +148,37 @@ class ToscaTemplateTest(TestCase):
         self.assertFalse(
             wordpress_node.is_derived_from("tosca.policies.Root"))
 
+    def test_nodetype_without_relationship(self):
+        # Nodes that contain "relationship" in "requirements"
+        depend_node_types = (
+            "tosca.nodes.SoftwareComponent",
+        )
+
+        # Nodes that do not contain "relationship" in "requirements"
+        non_depend_node_types = (
+            "tosca.nodes.Compute",
+            "sample.SC",
+        )
+
+        tosca_tpl = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/test_nodetype_without_relationship.yaml")
+        tosca = ToscaTemplate(tosca_tpl)
+
+        nodetemplates = tosca.nodetemplates
+        for node in nodetemplates:
+            node_depend = node.related_nodes
+            if node_depend:
+                self.assertIn(
+                    node.type,
+                    depend_node_types
+                )
+            else:
+                self.assertIn(
+                    node.type,
+                    non_depend_node_types
+                )
+
     def test_outputs(self):
         self.assertEqual(
             ['website_url'],
@@ -303,17 +334,17 @@ class ToscaTemplateTest(TestCase):
                     relation, node in node_tpl.relationships.items()])
                 self.assertEqual(expected_relationship, actual_relationship)
             if node_tpl.name == 'mysql_database':
-                    self.assertEqual(
-                        [('tosca.relationships.HostedOn', 'my_dbms')],
-                        [(relation.type, node.name) for
-                         relation,
-                         node in node_tpl.relationships.items()])
+                self.assertEqual(
+                    [('tosca.relationships.HostedOn', 'my_dbms')],
+                    [(relation.type, node.name) for
+                     relation,
+                     node in node_tpl.relationships.items()])
             if node_tpl.name == 'my_server':
-                    self.assertEqual(
-                        [('tosca.relationships.AttachesTo', 'my_storage')],
-                        [(relation.type, node.name) for
-                         relation,
-                         node in node_tpl.relationships.items()])
+                self.assertEqual(
+                    [('tosca.relationships.AttachesTo', 'my_storage')],
+                    [(relation.type, node.name) for
+                     relation,
+                     node in node_tpl.relationships.items()])
 
     def test_template_requirements_not_implemented(self):
         # TODO(spzala): replace this test with new one once TOSCA types look up
@@ -945,3 +976,9 @@ class ToscaTemplateTest(TestCase):
             os.path.dirname(os.path.abspath(__file__)),
             "data/test_custom_capabilty.yaml")
         ToscaTemplate(tosca_tpl)
+
+    def test_csar_multilevel_imports_relative_path(self):
+        csar_archive = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'data/CSAR/csar_relative_path_import_check.zip')
+        self.assertTrue(ToscaTemplate(csar_archive))
