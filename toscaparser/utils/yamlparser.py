@@ -47,8 +47,11 @@ def load_yaml(path, a_file=True):
             return
     except Exception:
         raise
-    return yaml.load(f.read(), Loader=yaml_loader)
-
+    try:
+        return yaml.load(f.read(), Loader=yaml_loader)
+    finally:
+        if f != None:
+            f.close()
 
 def simple_parse(tmpl_str):
     try:
