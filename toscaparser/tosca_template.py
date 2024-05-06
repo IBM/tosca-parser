@@ -67,7 +67,7 @@ class ToscaTemplate(object):
 
     '''Load the template data.'''
     def __init__(self, path=None, parsed_params=None, a_file=True,
-                 yaml_dict_tpl=None):
+                 yaml_dict_tpl=None, local_defs=None):
 
         ExceptionCollector.start()
         self.a_file = a_file
@@ -76,6 +76,8 @@ class ToscaTemplate(object):
         self.tpl = None
         self.nested_tosca_tpls_with_topology = {}
         self.nested_tosca_templates_with_topology = []
+        self.local_defs = local_defs
+
         if path:
             self.input_path = path
             self.path = self._get_path(path)
@@ -209,7 +211,8 @@ class ToscaTemplate(object):
 
         if imports:
             custom_service = toscaparser.imports.\
-                ImportsLoader(imports, path, type_defs, self.tpl)
+                ImportsLoader(imports, path, type_defs, self.tpl,
+                              self.local_defs)
 
             nested_tosca_tpls = custom_service.get_nested_tosca_tpls()
             self._update_nested_tosca_tpls_with_topology(nested_tosca_tpls)
@@ -321,7 +324,13 @@ class ToscaTemplate(object):
 
     def _is_sub_mapped_node(self, nodetemplate, tosca_tpl):
         """Return True if the nodetemple is substituted."""
-        if (nodetemplate and not nodetemplate.sub_mapping_tosca_template and
+        # NOTE(ueha): Since condition "not nodetemplate.sub_mapping_tosca_\
+        #             template" was deleted as a fix for bug/1883220, there is
+        #             some possibility of breaking something on translator side
+        #             that current tests not coverd.
+        #             And this enhancement does not align with TOSCA standard
+        #             but needed for ETSI NFV-SOL 001.
+        if (nodetemplate and
                 self.get_sub_mapping_node_type(tosca_tpl) == nodetemplate.type
                 and len(nodetemplate.interfaces) < 1):
             return True

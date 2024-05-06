@@ -11,7 +11,7 @@
 #    under the License.
 
 import os
-import six
+
 from toscaparser.common import exception
 from toscaparser import functions
 from toscaparser.tests.base import TestCase
@@ -239,11 +239,11 @@ class GetAttributeTest(TestCase):
         err = self.assertRaises(ValueError,
                                 functions.get_function, None, None,
                                 {'get_attribute': []})
-        self.assertIn(expected_msg, six.text_type(err))
+        self.assertIn(expected_msg, str(err))
         err = self.assertRaises(ValueError,
                                 functions.get_function, None, None,
                                 {'get_attribute': ['x']})
-        self.assertIn(expected_msg, six.text_type(err))
+        self.assertIn(expected_msg, str(err))
 
     def test_get_attribute_unknown_node_template_name(self):
         self.assertRaises(
@@ -341,6 +341,14 @@ class GetAttributeTest(TestCase):
     def test_get_attribute_capability_inheritance(self):
         self.assertIsNotNone(self._load_template(
             'functions/test_container_cap_child.yaml'))
+
+    def test_get_attribute_custom_data_type(self):
+        self.assertIsNotNone(self._load_template(
+            'functions/test_get_attribute_custom_data_type.yaml'))
+
+    def test_get_attribute_neste_data_types(self):
+        self.assertIsNotNone(self._load_template(
+            'functions/test_get_attribute_nested_data_types.yaml'))
 
 
 class ConcatTest(TestCase):

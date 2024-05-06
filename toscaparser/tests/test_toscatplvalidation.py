@@ -11,7 +11,6 @@
 #    under the License.
 
 import os
-import six
 
 from toscaparser.common import exception
 from toscaparser.imports import ImportsLoader
@@ -143,7 +142,9 @@ class ToscaTemplateValidationTest(TestCase):
         tpl = (toscaparser.utils.yamlparser.simple_parse(tpl_snippet))
         err = self.assertRaises(ValueError,
                                 TopologyTemplate, tpl, None)
-        expectedmessage = _('Enter a valid interface name')
+        expectedmessage = _('Node or relationship template "front_end" '
+                            'has not interface "Standard1" '
+                            'or operation "create".')
         self.assertEqual(expectedmessage, err.__str__())
         # test case 2
         tpl_snippet2 = '''
@@ -163,7 +164,8 @@ class ToscaTemplateValidationTest(TestCase):
         tpl2 = (toscaparser.utils.yamlparser.simple_parse(tpl_snippet2))
         err2 = self.assertRaises(KeyError,
                                  TopologyTemplate, tpl2, None)
-        expectedmessage2 = _('\'Node template "front_end1" was not found.\'')
+        expectedmessage2 = _('\'Node or relationship template "front_end1" '
+                             'was not found.\'')
         self.assertEqual(expectedmessage2, err2.__str__())
         # test case 3
         tpl_snippet3 = '''
@@ -447,6 +449,28 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
         self.assertTrue(custom_defs.get("mycompany.tosca.nodes."
                                         "WebApplication.WordPress"))
 
+    def test_imports_with_local_defs(self):
+        """Compare custom types on local and remote."""
+
+        ctypes = {
+            "remote": ("https://raw.githubusercontent.com/openstack/"
+                       "heat-translator/master/translator/tests/data/"
+                       "custom_types/wordpress.yaml"),
+            "local": "../data/wordpress.yaml"}
+
+        tpl_snippet = '''
+        imports:
+        - {}
+        '''.format(ctypes["remote"])
+        local_defs = {ctypes["remote"]: ctypes["local"]}
+
+        path = 'toscaparser/tests/data/tosca_elk.yaml'
+        imports = (toscaparser.utils.yamlparser.
+                   simple_parse(tpl_snippet)['imports'])
+        ld1 = ImportsLoader(imports, path, "node_types")
+        ld2 = ImportsLoader(imports, path, "node_types", local_defs)
+        self.assertEqual(ld1.get_custom_defs(), ld2.get_custom_defs())
+
     def test_imports_file_with_suffix_yml(self):
         tpl_snippet = '''
         imports:
@@ -500,8 +524,7 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
         try:
             output.validate()
         except Exception as err:
-            self.assertTrue(
-                isinstance(err, exception.MissingRequiredFieldError))
+            self.assertIsInstance(err, exception.MissingRequiredFieldError)
             self.assertEqual(_('Output "server_address" is missing required '
                                'field "value".'), err.__str__())
 
@@ -771,6 +794,18 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
         node_types = custom_type['node_types']
         for name in node_types:
             defintion = node_types[name]
+            custom_types[name] = defintion
+        return custom_types
+
+    def _custom_types_policy(self):
+        custom_types = {}
+        def_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/custom_types/custom_policy.yaml")
+        custom_type = toscaparser.utils.yamlparser.load_yaml(def_file)
+        policy_types = custom_type['policy_types']
+        for name in policy_types:
+            defintion = policy_types[name]
             custom_types[name] = defintion
         return custom_types
 
@@ -1429,7 +1464,7 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
         rel_template = RelationshipTemplate(rel_template[name], name)
         err = self.assertRaises(exception.MissingRequiredFieldError,
                                 rel_template.validate)
-        self.assertEqual(expectedmessage, six.text_type(err))
+        self.assertEqual(expectedmessage, str(err))
 
     def test_invalid_template_version(self):
         tosca_tpl = os.path.join(
@@ -1746,6 +1781,26 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
             lambda: Policy(name, policies[name], None, None))
         self.assertEqual(expectedmessage, err.__str__())
 
+    def test_policy_without_required_property(self):
+        tpl_snippet = '''
+        policies:
+          - some_policy:
+              type: tosca.policies.somePolicy
+              properties:
+                value: 100
+        '''
+        policies = (toscaparser.utils.yamlparser.
+                    simple_parse(tpl_snippet))['policies'][0]
+        name = list(policies.keys())[0]
+        policyObj = Policy(name, policies[name], None, None,
+                           self._custom_types_policy())
+        expectedmessage = _('"properties" of template "some_policy" is '
+                            'missing required field "[\'name\']".')
+        err = self.assertRaises(
+            exception.MissingRequiredFieldError,
+            policyObj.validate)
+        self.assertEqual(expectedmessage, err.__str__())
+
     def test_credential_datatype(self):
         tosca_tpl = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -1921,3 +1976,10 @@ heat-translator/master/translator/tests/data/custom_types/wordpress.yaml
             exception.MissingRequiredFieldError,
             lambda: Reservation(reservation[name]))
         self.assertEqual(expectedmessage, err.__str__())
+
+    def test_scalar_unit_without_unit(self):
+        tpl_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/test_scalar_unit_without_unit.yaml")
+        self.assertRaises(exception.ValidationError,
+                          lambda: ToscaTemplate(tpl_path))

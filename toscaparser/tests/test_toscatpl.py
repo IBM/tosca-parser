@@ -11,7 +11,7 @@
 #    under the License.
 
 import os
-import six
+
 from toscaparser.common import exception
 import toscaparser.elements.interfaces as ifaces
 from toscaparser.elements.nodetype import NodeType
@@ -203,7 +203,7 @@ class ToscaTemplateTest(TestCase):
                 self.assertEqual('wordpress/wordpress_configure.sh',
                                  interface.implementation)
                 self.assertEqual(3, len(interface.inputs))
-                TestCase.skip(self, 'bug #1440247')
+                self.skipTest('bug #1440247')
                 wp_db_port = interface.inputs['wp_db_port']
                 self.assertIsInstance(wp_db_port, GetProperty)
                 self.assertEqual('get_property', wp_db_port.name)
@@ -468,7 +468,7 @@ class ToscaTemplateTest(TestCase):
             lambda: NodeTemplate(name, nodetemplates,
                                  custom_def).get_capabilities_objects())
         self.assertEqual('Type "tosca.capabilities.TestCapability" is not '
-                         'a valid type.', six.text_type(err))
+                         'a valid type.', str(err))
 
     def test_capability_without_properties(self):
         expected_version = "tosca_simple_yaml_1_0"
@@ -587,7 +587,7 @@ class ToscaTemplateTest(TestCase):
                                  'tosca.nodes.SoftwareComponent.Logstash',
                                  'tosca.nodes.SoftwareComponent.Rsyslog.'
                                  'TestRsyslogType']
-        self.assertItemsEqual(tosca.topology_template.custom_defs.keys(),
+        self.assertCountEqual(tosca.topology_template.custom_defs.keys(),
                               expected_custom_types)
 
     def test_invalid_template_file(self):
@@ -982,3 +982,64 @@ class ToscaTemplateTest(TestCase):
             os.path.dirname(os.path.abspath(__file__)),
             'data/CSAR/csar_relative_path_import_check.zip')
         self.assertTrue(ToscaTemplate(csar_archive))
+
+    def test_csar_multiple_deployment_flavours(self):
+        csar_archive = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            'data/CSAR/csar_multiple_deployment_flavour.zip')
+        tosca = ToscaTemplate(csar_archive)
+        flavours = list()
+        for tp in tosca.nested_tosca_templates_with_topology:
+            flavour_id = tp.substitution_mappings.properties.get('flavour_id')
+            flavour = {'flavour_id': flavour_id}
+            flavours.append(flavour)
+        self.assertEqual(flavours[0]['flavour_id'], 'simple')
+        self.assertEqual(flavours[1]['flavour_id'], 'complex')
+
+    def test_custom_rel_get_type(self):
+        tosca_tpl = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/test_tosca_custom_rel.yaml")
+        tosca = ToscaTemplate(tosca_tpl)
+        for src in tosca.nodetemplates:
+            for rel, trgt in src.relationships.items():
+                rel_tpls = trgt.get_relationship_template()
+
+        self.assertEqual(rel_tpls[0].type, "MyAttachesTo")
+
+    def test_policies_without_required_property(self):
+        tosca_tpl = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/policies/test_policies_without_required_property.yaml")
+        self.assertRaises(exception.ValidationError, ToscaTemplate,
+                          tosca_tpl, None)
+
+    def test_local_custom_defs(self):
+        """Compare if custom defs on local and remote the same."""
+
+        tosca_tpl = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/tosca_single_instance_wordpress_with_url_import.yaml")
+
+        local_def = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "data/custom_types/wordpress.yaml")
+        remote_def = (
+            "https://raw.githubusercontent.com/openstack/"
+            "tosca-parser/master/toscaparser/tests/data/custom_types/"
+            "wordpress.yaml")
+
+        local_defs = {remote_def: local_def}
+        params = {'db_name': 'my_wordpress', 'db_user': 'my_db_user',
+                  'db_root_pwd': '12345678'}
+        tosca = ToscaTemplate(tosca_tpl, parsed_params=params)
+        tosca_local = ToscaTemplate(tosca_tpl, parsed_params=params,
+                                    local_defs=local_defs)
+
+        # Compare the name of input params defined in the custom defs
+        expected = ["wp_db_name", "wp_db_user", "wp_db_password"]
+        for t in [tosca, tosca_local]:
+            actual = list(
+                (t.tpl["topology_template"]["node_templates"]["wordpress"]
+                    ["interfaces"]["Standard"]["configure"]["inputs"]).keys())
+            self.assertEqual(expected, actual)

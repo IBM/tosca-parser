@@ -34,11 +34,12 @@ class ImportsLoader(object):
                        'namespace_prefix')
 
     def __init__(self, importslist, path, type_definition_list=None,
-                 tpl=None):
+                 tpl=None, local_defs=None):
         self.importslist = importslist
         self.custom_defs = {}
         self.nested_tosca_tpls = []
         self.nested_imports = {}
+        self.local_defs = local_defs
         if not path and not tpl:
             msg = _('Input tosca template is not provided.')
             log.warning(msg)
@@ -136,7 +137,7 @@ class ImportsLoader(object):
 
     def _validate_import_keys(self, import_name, import_uri_def):
         if self.FILE not in import_uri_def.keys():
-            log.warning(_('Missing keyname "file" in import "%(name)s".')
+            log.warning('Missing keyname "file" in import "%(name)s".'
                         % {'name': import_name})
             ExceptionCollector.appendException(
                 MissingRequiredFieldError(
@@ -144,8 +145,8 @@ class ImportsLoader(object):
                     required=self.FILE))
         for key in import_uri_def.keys():
             if key not in self.IMPORTS_SECTION:
-                log.warning(_('Unknown keyname "%(key)s" error in '
-                              'imported definition "%(def)s".')
+                log.warning('Unknown keyname "%(key)s" error in '
+                            'imported definition "%(def)s".'
                             % {'key': key, 'def': import_name})
                 ExceptionCollector.appendException(
                     UnknownFieldError(
@@ -197,7 +198,14 @@ class ImportsLoader(object):
             return None, None
 
         if toscaparser.utils.urlutils.UrlUtils.validate_url(file_name):
-            return file_name, YAML_LOADER(file_name, False)
+            has_file = False
+            if self.local_defs is not None:
+                for k in self.local_defs.keys():
+                    if k == file_name:
+                        file_name = self.local_defs[k]
+                        has_file = True
+
+            return file_name, YAML_LOADER(file_name, a_file=has_file)
         elif not repository:
             import_template = None
             if self.path:
@@ -255,7 +263,7 @@ class ImportsLoader(object):
                     return None, None
 
             if not import_template:
-                log.error(_('Import "%(name)s" is not valid.') %
+                log.error('Import "%(name)s" is not valid.' %
                           {'name': import_uri_def})
                 ExceptionCollector.appendException(
                     ImportError(_('Import "%s" is not valid.') %
@@ -264,7 +272,7 @@ class ImportsLoader(object):
             return import_template, YAML_LOADER(import_template, a_file)
 
         if short_import_notation:
-            log.error(_('Import "%(name)s" is not valid.') % import_uri_def)
+            log.error('Import "%(name)s" is not valid.' % import_uri_def)
             ExceptionCollector.appendException(
                 ImportError(_('Import "%s" is not valid.') % import_uri_def))
             return None, None
